@@ -1,10 +1,38 @@
-import glob
+import os
 
-arquivos = sorted(glob.glob("ddl/*.sql"))
+ordem = [
+    "ddl/centro_de_transporte.sql",
+    "ddl/central_estadual.sql",
+    "ddl/dispositivo_de_gps.sql",
+    "ddl/hospital.sql",
+    "ddl/pessoa.sql",
+    "ddl/tipo.sql",
+    "ddl/paciente.sql",
+    "ddl/modo.sql",
+    "ddl/familiar.sql",
+    "ddl/paciente_familiar.sql",
+    "ddl/receptor.sql",
+    "ddl/doador.sql",
+    "ddl/historico_clinico.sql",
+    "ddl/profissional.sql",
+    "ddl/fila.sql",
+    "ddl/historico.sql",
+    "ddl/tipo_orgao_tecido.sql",
+    "ddl/orgao_tecido.sql",
+    "ddl/avaliacao_orgao.sql",
+    "ddl/avaliacao_orgao_enfermeiro.sql",
+    "ddl/transplante.sql",
+    "ddl/transporte.sql",
+    "ddl/localizacao.sql"
+]
 
 with open("final.sql", "w", encoding="utf8") as out:
-    for idx, f in enumerate(arquivos):
+    for idx, f in enumerate(ordem):
+        if not os.path.exists(f):
+            continue
+
         with open(f, "r", encoding="utf8") as src:
             out.write(src.read().strip())
-        if idx < len(arquivos) - 1:
-            out.write("\n\n")
+
+        # Apenas adiciona quebra de linha entre arquivos realmente existentes
+        out.write("\n\n")
