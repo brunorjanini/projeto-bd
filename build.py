@@ -30,6 +30,9 @@ with open("final.sql", "w", encoding="utf8") as out:
     for idx, f in enumerate(ordem):
         if not os.path.exists(f):
             continue
+        
+        if os.path.getsize(out) == 0:
+          continue
 
         with open(f, "r", encoding="utf8") as src:
             out.write(src.read().strip())
