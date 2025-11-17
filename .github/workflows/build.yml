@@ -1,0 +1,34 @@
+name: Build final.sql
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Instalar dependências (se houver requirements.txt)
+        run: |
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Gerar final.sql
+        run: python build.py
+
+      - name: Commit final.sql
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add final.sql
+          git commit -m "Gerando final.sql automaticamente" || echo "Nada para commitar"
+          git push
