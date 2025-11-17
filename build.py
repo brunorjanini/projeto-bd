@@ -27,15 +27,14 @@ ordem = [
 ]
 
 with open("final.sql", "w", encoding="utf8") as out:
-    for idx, f in enumerate(ordem):
-        if not os.path.exists(f):
-            continue
-        
-        if os.path.getsize(out) == 0:
-          continue
 
+    # Filtrar apenas arquivos válidos e não vazios
+    validos = [f for f in ordem if os.path.exists(f) and os.path.getsize(f) > 0]
+
+    for i, f in enumerate(validos):
         with open(f, "r", encoding="utf8") as src:
-            out.write(src.read().strip())
+            out.write(src.read().rstrip())
 
-        # Apenas adiciona quebra de linha entre arquivos realmente existentes
-        out.write("\n\n")
+        # Se não for o último arquivo válido, adiciona quebra dupla
+        if i < len(validos) - 1:
+            out.write("\n\n")
