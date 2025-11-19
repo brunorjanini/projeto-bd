@@ -1,12 +1,12 @@
-CREATE TABLE CentroDeTransporte (
-  id_centro_de_transporte SERIAL NOT NULL,
-  nome VARCHAR(100) NOT NULL,
-  cnpj CHAR(14) NOT NULL,
-  numero VARCHAR(11),
-  rua VARCHAR(100),
-  bairro VARCHAR(100),
-  cidade VARCHAR(100),
-  estado CHAR(2),
-  CONSTRAINT PK_CENTRO_DE_TRANSPORTE PRIMARY KEY(id_centro_de_transporte),
-  CONSTRAINT SK_CENTRO_DE_TRANSPORTE UNIQUE(cnpj)
+CREATE TABLE Centro_Transporte (
+    id_centro_transporte SERIAL PRIMARY KEY,
+    nome VARCHAR(100) NOT NULL,
+    CNPJ CHAR(18) NOT NULL UNIQUE, -- Formato: XX.XXX.XXX/YYYY-ZZ
+    rua VARCHAR(100),
+    numero VARCHAR(10),
+    bairro VARCHAR(50),
+    cidade VARCHAR(50),
+    estado CHAR(2),
+    -- '^[A-Z]{2}$' obriga ter exatamente 2 letras maiúsculas do início ao fim.
+  CONSTRAINT CK_Estado_Formato CHECK (estado ~ '^[A-Z]{2}$')
 );

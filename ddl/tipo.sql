@@ -1,4 +1,4 @@
-CREATE TABLE Pessoa_Tipo (
+CREATE TABLE Tipo (
     id_pessoa INTEGER NOT NULL,
     tipo VARCHAR(50) NOT NULL,
     CONSTRAINT PK_Pessoa_Tipo PRIMARY KEY (id_pessoa, tipo),

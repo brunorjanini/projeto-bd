@@ -1,15 +1,17 @@
 CREATE TABLE Pessoa (
     id_pessoa SERIAL,
     nome VARCHAR(100) NOT NULL,
-    CPF CHAR(14) NOT NULL UNIQUE,
+    CPF CHAR(14) NOT NULL,
     dataNasc DATE,
     telefone VARCHAR(20),
-    email VARCHAR(100) UNIQUE,
+    email VARCHAR(100),
     rua VARCHAR(100),
     numero VARCHAR(10),
     bairro VARCHAR(50),
     cidade VARCHAR(50),
     estado CHAR(2),
     CONSTRAINT PK_PESSOA PRIMARY KEY(id_pessoa),
+    CONSTRAINT UN_PESSOA UNIQUE(cpf),
+    --Verifica se o cpf está no formato xxx.xxx.xxx-xx
     CONSTRAINT CK_CPF CHECK(REGEXP_LIKE(CPF, '[0-9]{3}\.[0-9]{3}\.[0-9]{3}\-[0-9]{2}'))
 );
