@@ -335,7 +335,7 @@ CREATE TABLE Transporte (
 
     CONSTRAINT FK_Transporte_GPS FOREIGN KEY (dispositivo_gps)
         REFERENCES Dispositivo_GPS (serial)
-        ON DELETE SET NULL, -- Se o GPS quebrar/sumir, o registro de transporte continua existindo.
+       v ON DELETE SET NULL, -- Se o GPS quebrar/sumir, o registro de transporte continua existindo.
 
     CONSTRAINT FK_Transporte_Origem FOREIGN KEY (id_hospital_origem)
         REFERENCES Hospital (id_hospital)

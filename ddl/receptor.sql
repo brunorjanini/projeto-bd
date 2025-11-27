@@ -1,4 +1,3 @@
-
 CREATE TABLE Receptor (
     id_pessoa INTEGER,
     data_inscricao DATE  not null default CURRENT_DATE,

@@ -15,4 +15,3 @@ CREATE TABLE Paciente (
     -- Validar Fator RH
     CONSTRAINT CK_Fator_RH CHECK (fator_rh IN ('+', '-'))
 );
-c

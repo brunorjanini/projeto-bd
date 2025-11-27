@@ -4,10 +4,10 @@ CREATE TABLE Dispositivo_GPS (
     id_centro_transporte INTEGER NOT NULL,
 
     CONSTRAINT FK_GPS_Central FOREIGN KEY (Central_Estadual)
-        REFERENCES Central_Estadual (estado)
+        REFERENCES central_estadual(estado)
         ON DELETE RESTRICT,
 
     CONSTRAINT FK_GPS_Centro FOREIGN KEY (id_centro_transporte)
-        REFERENCES Centro_Transporte (id_centro_transporte)
+        REFERENCES centro_transporte (id_centro_transporte)
         ON DELETE CASCADE -- Se o centro de transporte fechar, os dispositivos são desvinculados ou deletados.
 );

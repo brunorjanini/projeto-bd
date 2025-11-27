@@ -7,4 +7,4 @@ CREATE TABLE Modo (
         ON DELETE CASCADE, -- Se o registro do Paciente for deletado, este também será.
     -- Validar os valores permitidos para 'modo'
     CONSTRAINT CK_Modo_Valores CHECK (modo IN ('r', 'd'))
-);c
+);

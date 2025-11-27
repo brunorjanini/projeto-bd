@@ -5,7 +5,7 @@ CREATE TABLE Central_Estadual (
   rua VARCHAR(100),
   bairro VARCHAR(100),
   cidade VARCHAR(100),
-  CONSTRAINT PK_CENTRAL_ESTADUAL PRIMARY KEY(estado)
+  CONSTRAINT PK_CENTRAL_ESTADUAL PRIMARY KEY(estado),
   -- '^[A-Z]{2}$' obriga ter exatamente 2 letras maiúsculas do início ao fim.
-  CONSTRAINT CK_Estado_Formato CHECK (estado ~ '^[A-Z]{2}$')
+  CONSTRAINT CK_Estado_Formato_Central CHECK (estado ~ '^[A-Z]{2}$')
 );

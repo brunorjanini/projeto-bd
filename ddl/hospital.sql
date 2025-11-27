@@ -12,8 +12,8 @@ CREATE TABLE Hospital (
     Central_Estadual CHAR(2) NOT NULL,
 
     CONSTRAINT FK_Hospital_Central FOREIGN KEY (Central_Estadual)
-        REFERENCES Central_Estadual (estado)
-        ON DELETE RESTRICT -- Impede deletar uma Central se ela tiver hospitais
+        REFERENCES central_estadual (estado)
+        ON DELETE restrict, -- Impede deletar uma Central se ela tiver hospitais
     -- Impede que um hospital no 'RJ' seja cadastrado na central de 'SP'.
     CONSTRAINT CK_Hospital_Estado_Coerente CHECK (estado = Central_Estadual)
 );

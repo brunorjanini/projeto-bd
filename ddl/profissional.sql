@@ -27,4 +27,4 @@ CREATE TABLE Profissional (
         (UPPER(profissao) = 'OUTROS')
     )
 );
-c
+

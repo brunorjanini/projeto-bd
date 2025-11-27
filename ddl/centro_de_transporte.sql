@@ -8,5 +8,5 @@ CREATE TABLE Centro_Transporte (
     cidade VARCHAR(50),
     estado CHAR(2),
     -- '^[A-Z]{2}$' obriga ter exatamente 2 letras maiúsculas do início ao fim.
-  CONSTRAINT CK_Estado_Formato CHECK (estado ~ '^[A-Z]{2}$')
+  CONSTRAINT CK_Estado_Formato_Transporte CHECK (estado ~ '^[A-Z]{2}$')
 );
