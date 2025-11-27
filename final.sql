@@ -8,7 +8,7 @@ CREATE TABLE Centro_Transporte (
     cidade VARCHAR(50),
     estado CHAR(2),
     -- '^[A-Z]{2}$' obriga ter exatamente 2 letras maiúsculas do início ao fim.
-  CONSTRAINT CK_Estado_Formato CHECK (estado ~ '^[A-Z]{2}$')
+  CONSTRAINT CK_Estado_Formato_Transporte CHECK (estado ~ '^[A-Z]{2}$')
 );
 
 CREATE TABLE Central_Estadual (
@@ -18,9 +18,9 @@ CREATE TABLE Central_Estadual (
   rua VARCHAR(100),
   bairro VARCHAR(100),
   cidade VARCHAR(100),
-  CONSTRAINT PK_CENTRAL_ESTADUAL PRIMARY KEY(estado)
+  CONSTRAINT PK_CENTRAL_ESTADUAL PRIMARY KEY(estado),
   -- '^[A-Z]{2}$' obriga ter exatamente 2 letras maiúsculas do início ao fim.
-  CONSTRAINT CK_Estado_Formato CHECK (estado ~ '^[A-Z]{2}$')
+  CONSTRAINT CK_Estado_Formato_Central CHECK (estado ~ '^[A-Z]{2}$')
 );
 
 CREATE TABLE Dispositivo_GPS (
@@ -29,11 +29,11 @@ CREATE TABLE Dispositivo_GPS (
     id_centro_transporte INTEGER NOT NULL,
 
     CONSTRAINT FK_GPS_Central FOREIGN KEY (Central_Estadual)
-        REFERENCES Central_Estadual (estado)
+        REFERENCES central_estadual(estado)
         ON DELETE RESTRICT,
 
     CONSTRAINT FK_GPS_Centro FOREIGN KEY (id_centro_transporte)
-        REFERENCES Centro_Transporte (id_centro_transporte)
+        REFERENCES centro_transporte (id_centro_transporte)
         ON DELETE CASCADE -- Se o centro de transporte fechar, os dispositivos são desvinculados ou deletados.
 );
 
@@ -51,8 +51,8 @@ CREATE TABLE Hospital (
     Central_Estadual CHAR(2) NOT NULL,
 
     CONSTRAINT FK_Hospital_Central FOREIGN KEY (Central_Estadual)
-        REFERENCES Central_Estadual (estado)
-        ON DELETE RESTRICT -- Impede deletar uma Central se ela tiver hospitais
+        REFERENCES central_estadual (estado)
+        ON DELETE restrict, -- Impede deletar uma Central se ela tiver hospitais
     -- Impede que um hospital no 'RJ' seja cadastrado na central de 'SP'.
     CONSTRAINT CK_Hospital_Estado_Coerente CHECK (estado = Central_Estadual)
 );
@@ -102,7 +102,6 @@ CREATE TABLE Paciente (
     -- Validar Fator RH
     CONSTRAINT CK_Fator_RH CHECK (fator_rh IN ('+', '-'))
 );
-c
 
 CREATE TABLE Modo (
     id_pessoa INTEGER PRIMARY KEY,
@@ -113,13 +112,13 @@ CREATE TABLE Modo (
         ON DELETE CASCADE, -- Se o registro do Paciente for deletado, este também será.
     -- Validar os valores permitidos para 'modo'
     CONSTRAINT CK_Modo_Valores CHECK (modo IN ('r', 'd'))
-);c
+);
 
 CREATE TABLE Familiar (
     id_pessoa INTEGER PRIMARY KEY,
 
     CONSTRAINT FK_Familiar_Pessoa FOREIGN KEY (id_pessoa)
-        REFERENCES Pessoa (id_pessoa)
+        REFERENCES pessoa (id_pessoa)
         ON DELETE CASCADE -- Se a Pessoa for excluída, deixa de ser Familiar automaticamente.
 );
 
@@ -135,7 +134,6 @@ CREATE TABLE Paciente_Familiar (
         REFERENCES Familiar (id_pessoa)
         ON DELETE CASCADE -- Se o registro do Paciente for deletado, este também será.
 );
-
 
 CREATE TABLE Receptor (
     id_pessoa INTEGER,
@@ -195,14 +193,17 @@ CREATE TABLE Profissional (
         (UPPER(profissao) = 'OUTROS')
     )
 );
-c
+
+CREATE TABLE Tipo_Orgao_Tecido (
+    nome VARCHAR(50) PRIMARY KEY
+);
 
 CREATE TABLE Fila (
     nome VARCHAR(50) PRIMARY KEY,
     CONSTRAINT FK_Fila_Tipo FOREIGN KEY (nome)
         REFERENCES Tipo_Orgao_Tecido (nome)
         ON DELETE CASCADE -- Se o tipo de órgão deixar de existir, a fila também é removida.
-);c
+);
 
 CREATE TABLE Historico_Fila (
     nome VARCHAR(50),
@@ -219,10 +220,6 @@ CREATE TABLE Historico_Fila (
     CONSTRAINT FK_Historico_Fila_Receptor FOREIGN KEY (id_pessoa)
         REFERENCES Receptor (id_pessoa)
         ON DELETE CASCADE
-);
-
-CREATE TABLE Tipo_Orgao_Tecido (
-    nome VARCHAR(50) PRIMARY KEY
 );
 
 CREATE TABLE Orgao_Tecido (
@@ -245,14 +242,14 @@ CREATE TABLE Orgao_Tecido (
     -- FK para Tipo de Órgão
     CONSTRAINT FK_Orgao_Tipo FOREIGN KEY (tipo_orgao)
         REFERENCES Tipo_Orgao_Tecido (nome)
-        ON DELETE RESTRICT -- Não pode deletar o tipo 'Rim' se existirem rins cadastrados.
+        ON DELETE restrict, -- Não pode deletar o tipo 'Rim' se existirem rins cadastrados.
         
          -- Regra 1: Validar Status Logístico
     CONSTRAINT CK_Orgao_Status CHECK (status IN ('Disponível', 'Em Transporte', 'Transplantado')),
 
     -- Regra 2: Validar Parecer da Avaliação (Validade)
     CONSTRAINT CK_Orgao_Validade CHECK (validade IN ('Não Avaliado', 'Aprovado', 'Reprovado'))
-);c
+);
 
 CREATE TABLE Avaliacao_Orgao (
     id_medico INTEGER,
@@ -261,12 +258,12 @@ CREATE TABLE Avaliacao_Orgao (
     CONSTRAINT PK_Avaliacao_Orgao PRIMARY KEY (id_medico, id_orgao, data_hora),
 
     CONSTRAINT FK_Avaliacao_Medico FOREIGN KEY (id_medico)
-        REFERENCES Profissional (id_pessoa)
+        REFERENCES profissional (id_pessoa)
         ON DELETE CASCADE,
 
     CONSTRAINT FK_Avaliacao_Orgao FOREIGN KEY (id_orgao)
-        REFERENCES Orgao_Tecido (id_orgao)
-        ON DELETE cascade,
+        REFERENCES orgao_Tecido (id_orgao)
+        ON DELETE cascade
 );
 
 CREATE TABLE Avaliacao_Orgao_Enfermeiro (
@@ -335,7 +332,7 @@ CREATE TABLE Transporte (
 
     CONSTRAINT FK_Transporte_GPS FOREIGN KEY (dispositivo_gps)
         REFERENCES Dispositivo_GPS (serial)
-       v ON DELETE SET NULL, -- Se o GPS quebrar/sumir, o registro de transporte continua existindo.
+        ON DELETE SET NULL, -- Se o GPS quebrar/sumir, o registro de transporte continua existindo.
 
     CONSTRAINT FK_Transporte_Origem FOREIGN KEY (id_hospital_origem)
         REFERENCES Hospital (id_hospital)
