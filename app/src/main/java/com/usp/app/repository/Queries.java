@@ -14,10 +14,6 @@ public class Queries {
         this.client = client;
     }
 
-    /**
-     * CONSULTA 1
-     * Lista hospitais de um estado da Central (ex: 'SP') e conta órgãos com status informado (ex: 'Disponível').
-     */
     public Flux<Consulta1HospitalDTO> consultaHospitaisPorEstadoEStatus(
             String centralEstadual,
             String statusOrgao
@@ -51,11 +47,6 @@ public class Queries {
                 .all();
     }
 
-    /**
-     * CONSULTA 2
-     * Profissionais de hospitais que NÃO possuem nenhum paciente.
-     * (Aqui não tinha parâmetro na sua SQL original, deixei 100% igual, só em forma de método.)
-     */
     public Flux<Consulta2ProfissionalSemPacienteDTO> consultaProfissionaisDeHospitaisSemPacientes() {
         String sql = """
             SELECT
@@ -81,10 +72,6 @@ public class Queries {
                 .all();
     }
 
-    /**
-     * CONSULTA 3
-     * Receptores com mais de N transplantes e que estão ativos em alguma fila.
-     */
     public Flux<Consulta3ReceptorFilaDTO> consultaReceptoresComMaisDeNTransplantesEmFila(
             int minTransplantes
     ) {
@@ -122,11 +109,6 @@ public class Queries {
                 .all();
     }
 
-    /**
-     * CONSULTA 4
-     * Transportes de órgãos entre dois hospitais (nomes com LIKE), podendo filtrar apenas concluídos.
-     * Passe algo como "%Hospital Vital SP%" se quiser LIKE com wildcard.
-     */
     public Flux<Consulta4TransporteDTO> consultaTransportesEntreHospitais(
             String nomeHospitalOrigemLike,
             String nomeHospitalDestinoLike,
@@ -177,11 +159,6 @@ public class Queries {
                 .all();
     }
 
-    /**
-     * CONSULTA 5
-     * Profissionais que avaliaram TODOS os tipos de órgão/tecido.
-     * A profissão é parametrizada (ex: 'MÉDICO').
-     */
     public Flux<Consulta5ProfissionalDivisaoDTO> consultaProfissionaisQueAvaliaramTodosTipos(
             String profissao
     ) {
