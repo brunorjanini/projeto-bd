@@ -1,0 +1,21 @@
+spring:
+  application:
+    name: app
+
+  r2dbc:
+    url: r2dbc:postgresql://localhost:5432/bdtrab
+    username: postgres
+    password: 5432
+    pool:
+      enabled: true
+      initial-size: 5
+      max-size: 20
+      max-idle-time: 30m
+      validation-query: SELECT 1
+
+  jackson:
+    serialization:
+      indent-output: true
+
+server:
+  port: 8080
