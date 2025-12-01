@@ -5,148 +5,147 @@ import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
 
+/**
+ * Repositório responsável por executar consultas de leitura no banco de dados.
+ * Utiliza R2DBC para operações reativas e não bloqueantes.
+ */
 @Repository
 public class Queries {
 
     private final DatabaseClient client;
 
+    /**
+     * Construtor do repositório de queries.
+     *
+     * @param client Cliente R2DBC para execução de queries no banco de dados
+     */
     public Queries(DatabaseClient client) {
         this.client = client;
     }
 
+    /**
+     * Consulta hospitais filtrados por estado (Central Estadual) e status de órgãos disponíveis.
+     * Retorna o nome do hospital, cidade e a quantidade total de órgãos disponíveis.
+     *
+     * @param centralEstadual Sigla do estado (UF) da central estadual para filtrar hospitais (opcional)
+     * @param statusOrgao Status dos órgãos para contagem (ex: "Disponível", "Em Transporte", "Transplantado") (opcional)
+     * @return Flux contendo lista de hospitais com suas respectivas quantidades de órgãos
+     */
     public Flux<Consulta1HospitalDTO> consultaHospitaisPorEstadoEStatus(
             String centralEstadual,
-            String statusOrgao
-    ) {
-        String sql = """
-            SELECT
-                H.nome   AS nome_hospital,
-                H.cidade AS cidade,
-                COUNT(OT.id_orgao) AS total_orgaos_disponiveis
-            FROM Hospital H
-            LEFT JOIN Paciente P
-                ON H.id_hospital = P.id_hospital
-            LEFT JOIN Doador D
-                ON P.id_pessoa = D.id_pessoa
-            LEFT JOIN Orgao_Tecido OT
-                ON D.id_pessoa = OT.id_doador
-               AND OT.status = :statusOrgao
-            WHERE H.Central_Estadual = :centralEstadual
-            GROUP BY H.nome, H.cidade
-            ORDER BY total_orgaos_disponiveis DESC
-            """;
+            String statusOrgao) {
+        boolean filtraStatus = statusOrgao != null && !statusOrgao.isBlank();
+        boolean filtraCentral = centralEstadual != null && !centralEstadual.isBlank();
 
-        return client.sql(sql)
-                .bind("statusOrgao", statusOrgao)
-                .bind("centralEstadual", centralEstadual)
+        String sql = String.format("""
+                SELECT
+                    H.nome   AS nome_hospital,
+                    H.cidade AS cidade,
+                    COUNT(OT.id_doador) AS total_orgaos_disponiveis
+                FROM (
+                    SELECT id_doador
+                    FROM Orgao_Tecido
+                    %s
+                ) OT
+                JOIN Paciente P
+                    ON OT.id_doador = P.id_pessoa
+                RIGHT JOIN (
+                    SELECT id_hospital, nome, cidade
+                    FROM Hospital
+                    %s
+                ) H
+                    ON P.id_hospital = H.id_hospital
+                GROUP BY H.nome, H.cidade
+                ORDER BY total_orgaos_disponiveis DESC
+                """,
+                filtraStatus ? "WHERE status = :statusOrgao" : "",
+                filtraCentral ? "WHERE Central_Estadual = :centralEstadual" : "");
+
+        DatabaseClient.GenericExecuteSpec spec = client.sql(sql);
+
+        // se os filtros foram fornecidos, faz o bind dos parâmetros
+        if (filtraStatus) {
+            spec = spec.bind("statusOrgao", statusOrgao);
+        }
+        if (filtraCentral) {
+            spec = spec.bind("centralEstadual", centralEstadual);
+        }
+
+        System.out.println("SQL hospitais = " + sql);
+        System.out.println("central = [" + centralEstadual + "], status = [" + statusOrgao + "]");
+
+        return spec
                 .map((row, meta) -> new Consulta1HospitalDTO(
                         row.get("nome_hospital", String.class),
                         row.get("cidade", String.class),
-                        row.get("total_orgaos_disponiveis", Long.class)
-                ))
+                        row.get("total_orgaos_disponiveis", Long.class)))
                 .all();
     }
 
-    public Flux<Consulta2ProfissionalSemPacienteDTO> consultaProfissionaisDeHospitaisSemPacientes() {
-        String sql = """
-            SELECT
-                P.nome AS nome_profissional,
-                P.cpf  AS cpf_profissional,
-                H.nome AS nome_hospital
-            FROM Pessoa P
-            JOIN Profissional PR ON P.id_pessoa = PR.id_pessoa
-            JOIN Hospital H      ON PR.id_hospital = H.id_hospital
-            WHERE PR.id_hospital NOT IN (
-                SELECT DISTINCT id_hospital
-                FROM Paciente
-            )
-            ORDER BY H.nome, P.nome
-            """;
-
-        return client.sql(sql)
-                .map((row, meta) -> new Consulta2ProfissionalSemPacienteDTO(
-                        row.get("nome_profissional", String.class),
-                        row.get("cpf_profissional", String.class),
-                        row.get("nome_hospital", String.class)
-                ))
-                .all();
-    }
-
-    public Flux<Consulta3ReceptorFilaDTO> consultaReceptoresComMaisDeNTransplantesEmFila(
-            int minTransplantes
-    ) {
-        String sql = """
-            SELECT
-                P.nome AS nome_receptor,
-                PA.tipo_sanguineo || PA.fator_rh AS tipo_sanguineo,
-                R.num_transplantes AS total_transplantes
-            FROM Pessoa P
-            JOIN Receptor R ON P.id_pessoa = R.id_pessoa
-            JOIN Paciente PA ON R.id_pessoa = PA.id_pessoa
-            WHERE
-                R.num_transplantes > :minTransplantes
-                AND EXISTS (
-                    SELECT 1
-                    FROM Historico_Fila HF
-                    WHERE HF.id_pessoa = R.id_pessoa
-                      AND HF.data_hora = (
-                          SELECT MAX(HF_INNER.data_hora)
-                          FROM Historico_Fila HF_INNER
-                          WHERE HF_INNER.id_pessoa = HF.id_pessoa
-                          GROUP BY HF_INNER.id_pessoa
-                      )
-                )
-            ORDER BY R.num_transplantes DESC
-            """;
-
-        return client.sql(sql)
-                .bind("minTransplantes", minTransplantes)
-                .map((row, meta) -> new Consulta3ReceptorFilaDTO(
-                        row.get("nome_receptor", String.class),
-                        row.get("tipo_sanguineo", String.class),
-                        row.get("total_transplantes", Integer.class)
-                ))
-                .all();
-    }
-
+    /**
+     * Consulta transportes de órgãos entre hospitais com filtros opcionais.
+     * Retorna informações sobre o órgão transportado, hospitais de origem e destino,
+     * centro de transporte responsável e tempo de trânsito em horas.
+     *
+     * @param nomeHospitalOrigem Nome (ou parte do nome) do hospital de origem para filtro (opcional)
+     * @param nomeHospitalDestino Nome (ou parte do nome) do hospital de destino para filtro (opcional)
+     * @param apenasConcluidos Se true, retorna apenas transportes já concluídos (com data de chegada); 
+     *                         se false ou null, retorna todos os transportes
+     * @return Flux contendo lista de transportes com suas respectivas informações
+     */
     public Flux<Consulta4TransporteDTO> consultaTransportesEntreHospitais(
-            String nomeHospitalOrigemLike,
-            String nomeHospitalDestinoLike,
-            boolean apenasConcluidos
-    ) {
-        String baseSql = """
-            SELECT
-                OT.id_orgao AS id_orgao,
-                OT.tipo_orgao AS tipo_orgao,
-                HA.nome AS hospital_origem,
-                HB.nome AS hospital_destino,
-                CT.nome AS centro_transporte,
-                T.dispositivo_gps AS serial_gps,
-                EXTRACT(EPOCH FROM (T.data_hora_chegada - T.data_hora_saida)) / 3600
-                    AS tempo_transito_horas
-            FROM Transporte T
-            JOIN Orgao_Tecido OT
-                ON T.id_orgao = OT.id_orgao
-            JOIN Hospital HA
-                ON T.id_hospital_origem = HA.id_hospital
-            JOIN Hospital HB
-                ON T.id_hospital_destino = HB.id_hospital
-            JOIN Centro_Transporte CT
-                ON T.id_centro_transporte = CT.id_centro_transporte
-            WHERE
-                HA.nome LIKE :hospitalOrigem
-                AND HB.nome LIKE :hospitalDestino
-            """;
+            String nomeHospitalOrigem,
+            String nomeHospitalDestino,
+            Boolean apenasConcluidos) {
+        StringBuilder sql = new StringBuilder("""
+                SELECT
+                    OT.id_orgao AS id_orgao,
+                    OT.tipo_orgao AS tipo_orgao,
+                    HA.nome AS hospital_origem,
+                    HB.nome AS hospital_destino,
+                    CT.nome AS centro_transporte,
+                    T.dispositivo_gps AS serial_gps,
+                    EXTRACT(EPOCH FROM (T.data_hora_chegada - T.data_hora_saida)) / 3600
+                        AS tempo_transito_horas
+                FROM Transporte T
+                JOIN Orgao_Tecido OT
+                    ON T.id_orgao = OT.id_orgao
+                JOIN Hospital HA
+                    ON T.id_hospital_origem = HA.id_hospital
+                JOIN Hospital HB
+                    ON T.id_hospital_destino = HB.id_hospital
+                JOIN Centro_Transporte CT
+                    ON T.id_centro_transporte = CT.id_centro_transporte
+                WHERE 1=1
+                """);
 
-        StringBuilder sql = new StringBuilder(baseSql);
-        if (apenasConcluidos) {
+        boolean temFiltroOrigem = nomeHospitalOrigem != null && !nomeHospitalOrigem.isBlank();
+        boolean temFiltroDestino = nomeHospitalDestino != null && !nomeHospitalDestino.isBlank();
+
+        // adiciona filtros conforme parâmetros fornecidos
+
+        if (temFiltroOrigem) {
+            sql.append(" AND HA.nome ILIKE :hospitalOrigem ");
+        }
+        if (temFiltroDestino) {
+            sql.append(" AND HB.nome ILIKE :hospitalDestino ");
+        }
+        if (Boolean.TRUE.equals(apenasConcluidos)) {
             sql.append(" AND T.data_hora_chegada IS NOT NULL ");
         }
+
         sql.append(" ORDER BY tempo_transito_horas DESC ");
 
-        return client.sql(sql.toString())
-                .bind("hospitalOrigem", nomeHospitalOrigemLike)
-                .bind("hospitalDestino", nomeHospitalDestinoLike)
+        DatabaseClient.GenericExecuteSpec spec = client.sql(sql.toString());
+
+        if (temFiltroOrigem) {
+            spec = spec.bind("hospitalOrigem", "%" + nomeHospitalOrigem + "%");
+        }
+        if (temFiltroDestino) {
+            spec = spec.bind("hospitalDestino", "%" + nomeHospitalDestino + "%");
+        }
+
+        return spec
                 .map((row, meta) -> new Consulta4TransporteDTO(
                         row.get("id_orgao", Long.class),
                         row.get("tipo_orgao", String.class),
@@ -154,43 +153,7 @@ public class Queries {
                         row.get("hospital_destino", String.class),
                         row.get("centro_transporte", String.class),
                         row.get("serial_gps", String.class),
-                        row.get("tempo_transito_horas", Double.class)
-                ))
-                .all();
-    }
-
-    public Flux<Consulta5ProfissionalDivisaoDTO> consultaProfissionaisQueAvaliaramTodosTipos(
-            String profissao
-    ) {
-        String sql = """
-            SELECT
-                P.nome AS nome_profissional,
-                P.cpf  AS cpf,
-                PR.profissao AS profissao
-            FROM Pessoa P
-            JOIN Profissional PR ON P.id_pessoa = PR.id_pessoa
-            WHERE
-                PR.profissao = :profissao
-                AND NOT EXISTS (
-                    SELECT NOME
-                    FROM Tipo_Orgao_Tecido TOT
-                    EXCEPT
-                    SELECT DISTINCT OT.tipo_orgao
-                    FROM Avaliacao_Orgao AO
-                    JOIN Orgao_Tecido OT ON AO.id_orgao = OT.id_orgao
-                    WHERE AO.id_medico = PR.id_pessoa
-                )
-            ORDER BY P.nome
-            """;
-
-        return client.sql(sql)
-                .bind("profissao", profissao)
-                .map((row, meta) -> new Consulta5ProfissionalDivisaoDTO(
-                        row.get("nome_profissional", String.class),
-                        row.get("cpf", String.class),
-                        row.get("profissao", String.class)
-                ))
+                        row.get("tempo_transito_horas", Double.class)))
                 .all();
     }
 }
-

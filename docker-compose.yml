@@ -1,0 +1,62 @@
+
+services:
+  nginx:
+    container_name: nginx
+    build:
+      context: .
+      dockerfile: Dockerfile.nginx
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx/:/etc/nginx/conf.d/
+    networks:
+      - internal
+    depends_on:
+      - postgres
+      - api
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: spring-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  postgres:
+    image: postgres:16
+    container_name: postgres-db
+    restart: always
+    env_file:
+      - .env
+    expose:
+      - "5432"
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./final.sql:/docker-entrypoint-initdb.d/01-schema.sql
+      - ./all_insertions.sql:/docker-entrypoint-initdb.d/02-data.sql
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 5s
+
+networks:
+  internal:
+volumes:
+  postgres-data:

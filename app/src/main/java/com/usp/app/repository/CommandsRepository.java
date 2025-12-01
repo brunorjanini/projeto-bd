@@ -1,23 +1,39 @@
 package com.usp.app.repository;
 
-import com.usp.app.dto.AtualizarNumTransplantesDTO;
-import com.usp.app.dto.NovaAvaliacaoOrgaoDTO;
-import com.usp.app.dto.NovoHistoricoFilaDTO;
 import com.usp.app.dto.NovoHospitalDTO;
-import com.usp.app.dto.NovoOrgaoDTO;
+import com.usp.app.dto.RealizarTransplanteDTO;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.reactive.TransactionalOperator;
 import reactor.core.publisher.Mono;
 
+/**
+ * Repositório responsável por executar comandos de escrita no banco de dados.
+ * Inclui operações de inserção e atualização usando R2DBC de forma reativa.
+ */
 @Repository
 public class CommandsRepository {
 
     private final DatabaseClient client;
+    private final TransactionalOperator transactionalOperator;
 
-    public CommandsRepository(DatabaseClient client) {
+    /**
+     * Construtor do repositório de comandos.
+     *
+     * @param client Cliente R2DBC para execução de comandos SQL
+     * @param transactionalOperator Operador transacional para gerenciar transações reativas
+     */
+    public CommandsRepository(DatabaseClient client, TransactionalOperator transactionalOperator) {
         this.client = client;
+        this.transactionalOperator = transactionalOperator;
     }
 
+    /**
+     * Insere um novo hospital no banco de dados.
+     *
+     * @param dto Objeto contendo os dados do hospital a ser cadastrado
+     * @return Mono contendo o número de linhas afetadas pela operação
+     */
     public Mono<Long> inserirHospital(NovoHospitalDTO dto) {
         String sql = """
             INSERT INTO Hospital
@@ -40,60 +56,72 @@ public class CommandsRepository {
                 .rowsUpdated();
     }
 
-    public Mono<Long> inserirOrgao(NovoOrgaoDTO dto) {
+    /**
+     * Realiza um transplante completo de forma transacional.
+     * Esta operação executa múltiplas ações em uma única transação:
+     * <ol>
+     *   <li>Insere o registro do transplante na tabela Transplante</li>
+     *   <li>Atualiza o status do órgão para "Transplantado" e validade para "Aprovado"</li>
+     *   <li>Incrementa o contador de transplantes do receptor</li>
+     *   <li>Remove o receptor da fila de espera correspondente ao tipo de órgão</li>
+     * </ol>
+     *
+     * @param dto Objeto contendo os dados do transplante (ID do órgão, ID do receptor e status)
+     * @return Mono contendo o número de linhas afetadas pela operação
+     * @throws RuntimeException Se houver erro durante a execução do transplante
+     */
+    public Mono<Long> realizarTransplante(RealizarTransplanteDTO dto) {
         String sql = """
-            INSERT INTO Orgao_Tecido (id_doador, tipo_orgao, status, data_captacao)
-            VALUES (:idDoador, :tipoOrgao, :status, :dataCaptacao)
+            WITH novo_transplante AS (
+                INSERT INTO Transplante (
+                    id_orgao,
+                    id_receptor,
+                    data_hora,
+                    status_transplante
+                )
+                VALUES (
+                    :idOrgao,
+                    :idReceptor,
+                    CURRENT_TIMESTAMP,
+                    :statusTransplante
+                )
+                RETURNING id_orgao, id_receptor
+            ),
+            atualiza_orgao AS (
+                UPDATE Orgao_Tecido o
+                SET status   = 'Transplantado',
+                    validade = 'Aprovado'
+                FROM novo_transplante t
+                WHERE o.id_orgao = t.id_orgao
+                RETURNING o.id_orgao, t.id_receptor
+            ),
+            atualiza_receptor AS (
+                UPDATE Receptor r
+                SET num_transplantes = num_transplantes + 1
+                FROM atualiza_orgao a
+                WHERE r.id_pessoa = a.id_receptor
+                RETURNING a.id_orgao, a.id_receptor
+            )
+            DELETE FROM Historico_Fila hf
+            USING atualiza_receptor ar
+            WHERE hf.id_pessoa = ar.id_receptor
+              AND hf.nome = (
+                  SELECT tipo_orgao
+                  FROM Orgao_Tecido o
+                  WHERE o.id_orgao = ar.id_orgao
+              )
             """;
 
         return client.sql(sql)
-                .bind("idDoador", dto.idDoador())
-                .bind("tipoOrgao", dto.tipoOrgao())
-                .bind("status", dto.status())
-                .bind("dataCaptacao", dto.dataCaptacao())
-                .fetch()
-                .rowsUpdated();
-    }
-
-    public Mono<Long> inserirAvaliacaoOrgao(NovaAvaliacaoOrgaoDTO dto) {
-        String sql = """
-            INSERT INTO Avaliacao_Orgao (id_medico, id_orgao, data_hora)
-            VALUES (:idMedico, :idOrgao, :dataHora)
-            """;
-
-        return client.sql(sql)
-                .bind("idMedico", dto.idMedico())
                 .bind("idOrgao", dto.idOrgao())
-                .bind("dataHora", dto.dataHora())
+                .bind("idReceptor", dto.idReceptor())
+                .bind("statusTransplante", dto.statusTransplante())
                 .fetch()
-                .rowsUpdated();
-    }
-
-    public Mono<Long> inserirHistoricoFila(NovoHistoricoFilaDTO dto) {
-        String sql = """
-            INSERT INTO Historico_Fila (nome, id_pessoa, posicao)
-            VALUES (:nomeFila, :idPessoa, :posicao)
-            """;
-
-        return client.sql(sql)
-                .bind("nomeFila", dto.nomeFila())
-                .bind("idPessoa", dto.idPessoa())
-                .bind("posicao", dto.posicao())
-                .fetch()
-                .rowsUpdated();
-    }
-
-    public Mono<Long> atualizarNumTransplantes(Integer idPessoa, AtualizarNumTransplantesDTO dto) {
-        String sql = """
-            UPDATE Receptor
-            SET num_transplantes = :num
-            WHERE id_pessoa = :idPessoa
-            """;
-
-        return client.sql(sql)
-                .bind("num", dto.numTransplantes())
-                .bind("idPessoa", idPessoa)
-                .fetch()
-                .rowsUpdated();
+                .rowsUpdated()
+                .as(transactionalOperator::transactional) // faz COMMIT e ROLLBACK (se der erro)
+                .onErrorResume(error -> {
+                    System.err.println("Erro ao realizar transplante: " + error.getMessage());
+                    return Mono.error(new RuntimeException("Falha ao realizar transplante: " + error.getMessage()));
+                });
     }
 }

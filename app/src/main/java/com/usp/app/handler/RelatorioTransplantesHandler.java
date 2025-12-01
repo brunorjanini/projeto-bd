@@ -2,34 +2,46 @@ package com.usp.app.handler;
 
 
 import com.usp.app.dto.Consulta1HospitalDTO;
-import com.usp.app.dto.Consulta2ProfissionalSemPacienteDTO;
-import com.usp.app.dto.Consulta3ReceptorFilaDTO;
 import com.usp.app.dto.Consulta4TransporteDTO;
-import com.usp.app.dto.Consulta5ProfissionalDivisaoDTO;
 import com.usp.app.service.GetQueriesService;
 
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.server.ServerRequest;
 import org.springframework.web.reactive.function.server.ServerResponse;
 
 import reactor.core.publisher.Mono;
 
+/**
+ * Handler responsável por processar requisições HTTP de leitura relacionadas
+ * a relatórios e consultas do sistema de transplantes.
+ * Utiliza programação funcional reativa com WebFlux.
+ */
 @Service
 public class RelatorioTransplantesHandler {
 
     private final GetQueriesService service;
 
+    /**
+     * Construtor do handler de relatórios.
+     *
+     * @param service Serviço de queries para lógica de negócio de leitura
+     */
     public RelatorioTransplantesHandler(GetQueriesService service) {
         this.service = service;
     }
 
     /**
-     * GET /api/relatorios/hospitais?central=SP&status=Disponível
+     * Endpoint GET para listar hospitais com contagem de órgãos disponíveis.
+     * Suporta filtros opcionais por central estadual e status de órgãos.
+     * 
+     * <p>Exemplo: GET /api/relatorios/hospitais?central=SP&amp;status=Disponível</p>
+     *
+     * @param request Requisição HTTP contendo query parameters opcionais (central, status)
+     * @return Mono de ServerResponse com status 200 e lista de hospitais no body
      */
     public Mono<ServerResponse> listarHospitais(ServerRequest request) {
-        String central = request.queryParam("central").orElse("SP");
-        String status = request.queryParam("status").orElse("Disponível");
+        String central = request.queryParam("central").orElse(null);
+        String status = request.queryParam("status").orElse(null);
 
         return ServerResponse.ok()
                 .body(service.hospitaisPorEstadoEStatus(central, status),
@@ -37,61 +49,24 @@ public class RelatorioTransplantesHandler {
     }
 
     /**
-     * GET /api/relatorios/profissionais-sem-pacientes
-     */
-    public Mono<ServerResponse> profissionaisSemPacientes(ServerRequest request) {
-        return ServerResponse.ok()
-                .body(service.profissionaisDeHospitaisSemPacientes(),
-                      Consulta2ProfissionalSemPacienteDTO.class);
-    }
-
-    /**
-     * GET /api/relatorios/receptores?minTransplantes=1
-     */
-    public Mono<ServerResponse> receptoresComMaisTransplantes(ServerRequest request) {
-        int minTransplantes = request.queryParam("minTransplantes")
-                .map(Integer::parseInt)
-                .orElse(1);
-
-        return ServerResponse.ok()
-                .body(service.receptoresComMaisDeNTransplantesEmFila(minTransplantes),
-                      Consulta3ReceptorFilaDTO.class);
-    }
-
-    /**
-     * GET /api/relatorios/transportes
-     *   ?origemLike=%25Hospital%20Vital%20SP%25
-     *   &destinoLike=%25Hospital%20Carioca%25
-     *   &apenasConcluidos=true
+     * Endpoint GET para listar transportes de órgãos entre hospitais.
+     * Suporta filtros opcionais por nome dos hospitais de origem e destino,
+     * e flag para retornar apenas transportes concluídos.
+     * 
+     * <p>Exemplo: GET /api/relatorios/transportes?origemLike=Hospital&amp;destinoLike=Clinicas&amp;apenasConcluidos=true</p>
+     *
+     * @param request Requisição HTTP contendo query parameters opcionais (origemLike, destinoLike, apenasConcluidos)
+     * @return Mono de ServerResponse com status 200 e lista de transportes no body
      */
     public Mono<ServerResponse> transportesEntreHospitais(ServerRequest request) {
-        String origemLike  = request.queryParam("origemLike").orElse("%Hospital Vital SP%");
-        String destinoLike = request.queryParam("destinoLike").orElse("%Hospital Carioca%");
+        String origemLike  = request.queryParam("origemLike").orElse(null);
+        String destinoLike = request.queryParam("destinoLike").orElse(null);
         boolean apenasConcluidos = request.queryParam("apenasConcluidos")
                 .map(Boolean::parseBoolean)
-                .orElse(true);
+                .orElse(false);
 
         return ServerResponse.ok()
                 .body(service.transportesEntreHospitais(origemLike, destinoLike, apenasConcluidos),
                       Consulta4TransporteDTO.class);
-    }
-
-    /**
-     * GET /api/relatorios/profissionais-avaliaram-todos?profissao=MÉDICO
-     */
-    public Mono<ServerResponse> profissionaisQueAvaliaramTodos(ServerRequest request) {
-        String profissao = request.queryParam("profissao").orElse("MÉDICO");
-
-        return ServerResponse.ok()
-                .body(service.profissionaisQueAvaliaramTodosTipos(profissao),
-                      Consulta5ProfissionalDivisaoDTO.class);
-    }
-
-    /**
-     * Error handling for bad requests.
-     */
-    private Mono<ServerResponse> badRequest(String message) {
-        return ServerResponse.status(HttpStatus.BAD_REQUEST)
-                .bodyValue(message);
     }
 }
