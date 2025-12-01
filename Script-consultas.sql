@@ -4,27 +4,21 @@
 --           órgãos foram captados lá e estão atualmente com o status 'Disponível'.
 --           Incluir hospitais que não tiveram órgãos captados ainda (Contagem = 0).
 
-SELECT
-    H.nome AS "Nome do Hospital",
-    H.cidade AS "Cidade",
-    COUNT(OT.id_orgao) AS "Total de Órgãos Disponíveis Captados"
-FROM
-    Hospital H
--- 1. Junta Hospital (H) com Paciente (P)
-LEFT JOIN
-    Paciente P ON H.id_hospital = P.id_hospital
--- 2. Junta Paciente (P) com Doador (D) - id_pessoa é a FK/PK em ambas
-LEFT JOIN
-    Doador D ON P.id_pessoa = D.id_pessoa
--- 3. Junta Doador (D) com Órgão/Tecido (OT)
-LEFT JOIN
-    Orgao_Tecido OT ON D.id_pessoa = OT.id_doador AND OT.status = 'Disponível'
-WHERE
-    H.Central_Estadual = 'SP' -- Filtro de Estado
-GROUP BY
-    H.nome, H.cidade
-ORDER BY
-    "Total de Órgãos Disponíveis Captados" DESC;
+SELECT H.id_hospital, H.nome, H.cidade, COUNT(id_doador) AS "Total de Órgãos Disponíveis Captados"
+FROM (
+    SELECT id_doador
+    FROM Orgao_Tecido 
+    WHERE status = 'Disponível'
+) OT 
+JOIN Paciente P
+ON OT.id_doador =  P.id_pessoa
+RIGHT JOIN (
+    SELECT id_hospital, nome, cidade
+    FROM Hospital
+    WHERE Central_Estadual = 'SP'
+) H
+ON P.id_hospital = H.id_hospital
+GROUP BY H.id_hospital, H.nome, H.cidade;
 
 
 -- CONSULTA 2: Consulta Aninhada NÃO Correlacionada e Junção Interna
@@ -35,22 +29,17 @@ ORDER BY
 
 SELECT
     P.nome AS "Nome do Profissional",
-    P.cpf AS "CPF do Profissional",
-    H.nome AS "Nome do Hospital"
+    P.cpf AS "CPF do Profissional"
 FROM
     Pessoa P
 JOIN
     Profissional PR ON P.id_pessoa = PR.id_pessoa
-JOIN
-    Hospital H ON PR.id_hospital = H.id_hospital
 WHERE
     -- Consulta aninhada NÃO correlacionada: retorna a lista de IDs de Hospitais que possuem pacientes
     PR.id_hospital NOT IN (
         SELECT DISTINCT id_hospital
         FROM Paciente
     )
-ORDER BY
-    H.nome, P.nome;
 
 
 -- CONSULTA 3: Consulta Aninhada Correlacionada (Uso de EXISTS) e Agrupamento
@@ -70,18 +59,9 @@ JOIN
     Paciente PA ON R.id_pessoa = PA.id_pessoa
 WHERE
     R.num_transplantes > 1
-    -- Consulta Aninhada Correlacionada: Verifica se o Receptor (R.id_pessoa) está ativo em alguma fila.
-    AND EXISTS (
-        SELECT 1
+    AND P.id_pessoa IN (
+        SELECT id_pessoa
         FROM Historico_Fila HF
-        WHERE HF.id_pessoa = R.id_pessoa
-        -- Subconsulta para obter a última posição conhecida do paciente naquela fila
-        AND HF.data_hora = (
-            SELECT MAX(data_hora)
-            FROM Historico_Fila HF_INNER
-            WHERE HF_INNER.id_pessoa = HF.id_pessoa
-            GROUP BY HF_INNER.id_pessoa
-        )
     )
 ORDER BY
     R.num_transplantes DESC;
@@ -100,7 +80,6 @@ SELECT
     HB.nome AS "Hospital de Destino",
     CT.nome AS "Centro de Transporte",
     T.dispositivo_gps AS "Serial GPS",
-    -- Cálculo da diferença em horas (Retorno esperado: 1.0 hora)
     EXTRACT(EPOCH FROM (T.data_hora_chegada - T.data_hora_saida)) / 3600 AS "Tempo de Trânsito (Horas)"
 FROM
     Transporte T
@@ -113,8 +92,7 @@ JOIN
 JOIN
     Centro_Transporte CT ON T.id_centro_transporte = CT.id_centro_transporte
 WHERE
-    T.data_hora_chegada IS NOT NULL -- Apenas transportes concluídos
-    -- FILTRO CORRIGIDO: Usa os nomes reais dos hospitais do transporte
+    T.data_hora_chegada IS NOT NULL
     AND HA.nome LIKE 'Hospital Vital SP'
     AND HB.nome LIKE 'Hospital Carioca'
 ORDER BY
@@ -131,24 +109,25 @@ ORDER BY
 
 SELECT
     P.nome AS "Nome do Profissional",
-    P.cpf AS "CPF",
+    P.cpf  AS "CPF",
     PR.profissao AS "Profissão"
-FROM
-    Pessoa P
-JOIN
-    Profissional PR ON P.id_pessoa = PR.id_pessoa
+FROM Profissional PR
+JOIN Pessoa P
+    ON P.id_pessoa = PR.id_pessoa
+JOIN Avaliacao_Orgao AO
+    ON AO.id_medico = PR.id_pessoa
+JOIN Orgao_Tecido OT
+    ON OT.id_orgao = AO.id_orgao
 WHERE
-    PR.profissao = 'MÉDICO' -- Apenas médicos fazem a avaliação principal
-    AND NOT EXISTS (
-        -- Subconsulta 1: Pega todos os tipos de órgãos/tecido
-        SELECT NOME
-        FROM Tipo_Orgao_Tecido TOT
-        EXCEPT
-        -- Subconsulta 2: Pega os tipos de órgão/tecido que o Profissional (externo) avaliou
-        SELECT DISTINCT OT.tipo_orgao
-        FROM Avaliacao_Orgao AO
-        JOIN Orgao_Tecido OT ON AO.id_orgao = OT.id_orgao
-        WHERE AO.id_medico = PR.id_pessoa -- Correlacionada: verifica o profissional do loop
+    PR.profissao = 'MÉDICO'
+GROUP BY
+    P.nome,
+    P.cpf,
+    PR.profissao,
+    PR.id_pessoa
+HAVING COUNT(DISTINCT OT.tipo_orgao) = (
+    SELECT COUNT(*)
+    FROM Tipo_Orgao_Tecido
     )
 ORDER BY
     P.nome;
