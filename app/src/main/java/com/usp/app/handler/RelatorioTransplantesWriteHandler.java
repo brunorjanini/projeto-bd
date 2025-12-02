@@ -80,7 +80,7 @@ public class RelatorioTransplantesWriteHandler {
                 )
                 .onErrorResume(error ->
                         ServerResponse.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                                .bodyValue("Erro ao realizar transplante: " + error.getMessage())
+                                .bodyValue(error.getMessage())
                 );
     }
 }

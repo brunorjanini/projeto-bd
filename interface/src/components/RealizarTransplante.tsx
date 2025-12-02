@@ -22,12 +22,23 @@ function RealizarTransplante() {
 
         setLoading(true);
         setMensagem(null);
+        let sucesso;
 
-        const sucesso = await transplantWriteService.realizarTransplante({
-            idOrgao: parseInt(idOrgao),
-            idReceptor: parseInt(idReceptor),
-            statusTransplante,
-        });
+        try {
+            sucesso = await transplantWriteService.realizarTransplante({
+                idOrgao: parseInt(idOrgao),
+                idReceptor: parseInt(idReceptor),
+                statusTransplante,
+            });
+        } catch (error) {
+            console.error("Erro ao realizar transplante", error);
+            setMensagem({
+                tipo: "error",
+                texto: `Erro ao realizar transplante: ${error instanceof Error ? error.message : 'Erro desconhecido'}`,
+            });
+            setLoading(false);
+            return;
+        }
 
         setLoading(false);
 
